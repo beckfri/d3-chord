@@ -1,122 +1,122 @@
-import {max, tau} from "./math.js";
-
-function range(i, j) {
-  return Array.from({length: j - i}, (_, k) => i + k);
-}
-
-function compareValue(compare) {
-  return function(a, b) {
-    return compare(
-      a.source.value + a.target.value,
-      b.source.value + b.target.value
-    );
-  };
-}
-
-export default function() {
-  return chord(false, false);
-}
-
-export function chordTranspose() {
-  return chord(false, true);
-}
-
-export function chordDirected() {
-  return chord(true, false);
-}
-
-function chord(directed, transpose) {
-  var padAngle = 0,
-      sortGroups = null,
-      sortSubgroups = null,
-      sortChords = null;
-
-  function chord(matrix) {
-    var n = matrix.length,
-        groupSums = new Array(n),
-        groupIndex = range(0, n),
-        chords = new Array(n * n),
-        groups = new Array(n),
-        k = 0, dx;
-
-    matrix = Float64Array.from({length: n * n}, transpose
-        ? (_, i) => matrix[i % n][i / n | 0]
-        : (_, i) => matrix[i / n | 0][i % n]);
-
-    // Compute the scaling factor from value to angle in [0, 2pi].
-    for (let i = 0; i < n; ++i) {
-      let x = 0;
-      for (let j = 0; j < n; ++j) x += matrix[i * n + j] + directed * matrix[j * n + i];
-      k += groupSums[i] = x;
-    }
-    k = max(0, tau - padAngle * n) / k;
-    dx = k ? padAngle : tau / n;
-
-    // Compute the angles for each group and constituent chord.
-    {
-      let x = 0;
-      if (sortGroups) groupIndex.sort((a, b) => sortGroups(groupSums[a], groupSums[b]));
-      for (const i of groupIndex) {
-        const x0 = x;
-        if (directed) {
-          const subgroupIndex = range(~n + 1, n).filter(j => j < 0 ? matrix[~j * n + i] : matrix[i * n + j]);
-          if (sortSubgroups) subgroupIndex.sort((a, b) => sortSubgroups(a < 0 ? -matrix[~a * n + i] : matrix[i * n + a], b < 0 ? -matrix[~b * n + i] : matrix[i * n + b]));
-          for (const j of subgroupIndex) {
-            if (j < 0) {
-              const chord = chords[~j * n + i] || (chords[~j * n + i] = {source: null, target: null});
-              chord.target = {index: i, startAngle: x, endAngle: x += matrix[~j * n + i] * k, value: matrix[~j * n + i]};
-            } else {
-              const chord = chords[i * n + j] || (chords[i * n + j] = {source: null, target: null});
-              chord.source = {index: i, startAngle: x, endAngle: x += matrix[i * n + j] * k, value: matrix[i * n + j]};
-            }
-          }
-          groups[i] = {index: i, startAngle: x0, endAngle: x, value: groupSums[i]};
-        } else {
-          const subgroupIndex = range(0, n).filter(j => matrix[i * n + j] || matrix[j * n + i]);
-          if (sortSubgroups) subgroupIndex.sort((a, b) => sortSubgroups(matrix[i * n + a], matrix[i * n + b]));
-          for (const j of subgroupIndex) {
-            let chord;
-            if (i < j) {
-              chord = chords[i * n + j] || (chords[i * n + j] = {source: null, target: null});
-              chord.source = {index: i, startAngle: x, endAngle: x += matrix[i * n + j] * k, value: matrix[i * n + j]};
-            } else {
-              chord = chords[j * n + i] || (chords[j * n + i] = {source: null, target: null});
-              chord.target = {index: i, startAngle: x, endAngle: x += matrix[i * n + j] * k, value: matrix[i * n + j]};
-              if (i === j) chord.source = chord.target;
-            }
-            if (chord.source && chord.target && chord.source.value < chord.target.value) {
-              const source = chord.source;
-              chord.source = chord.target;
-              chord.target = source;
-            }
-          }
-          groups[i] = {index: i, startAngle: x0, endAngle: x, value: groupSums[i]};
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Endangered Species Graph</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        .node {
+            stroke: #fff;
+            stroke-width: 1.5px;
         }
-        x += dx;
-      }
-    }
 
-    // Remove empty chords.
-    chords = Object.values(chords);
-    chords.groups = groups;
-    return sortChords ? chords.sort(sortChords) : chords;
-  }
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // Define the dimensions and margins of the graph
+        const width = 800;
+        const height = 600;
 
-  chord.padAngle = function(_) {
-    return arguments.length ? (padAngle = max(0, _), chord) : padAngle;
-  };
+        // Create an SVG container
+        const svg = d3.select("body")
+            .append("svg")
+            .attr("width", width)
+            .attr("height", height);
 
-  chord.sortGroups = function(_) {
-    return arguments.length ? (sortGroups = _, chord) : sortGroups;
-  };
+        // Sample data in JSON format
+        const graph = {
+            "nodes": [
+                { "id": "Bluetenspezialisten", "group": "Bees" },
+                { "id": "Bodennister", "group": "Bees" },
+                { "id": "Ausgestorbene Arten", "group": "Bees" },
+                { "id": "Tiefland Arten", "group": "Bees" },
+                { "id": "Bats", "group": "Bats" }
+            ],
+            "links": [
+                { "source": "Bluetenspezialisten", "target": "Bats", "value": 1 },
+                { "source": "Bodennister", "target": "Tiefland Arten", "value": 2 },
+                { "source": "Bats", "target": "Ausgestorbene Arten", "value": 3 }
+            ]
+        };
 
-  chord.sortSubgroups = function(_) {
-    return arguments.length ? (sortSubgroups = _, chord) : sortSubgroups;
-  };
+        // Create a force simulation
+        const simulation = d3.forceSimulation(graph.nodes)
+            .force("link", d3.forceLink(graph.links).id(d => d.id))
+            .force("charge", d3.forceManyBody().strength(-300))
+            .force("center", d3.forceCenter(width / 2, height / 2));
 
-  chord.sortChords = function(_) {
-    return arguments.length ? (_ == null ? sortChords = null : (sortChords = compareValue(_))._ = _, chord) : sortChords && sortChords._;
-  };
+        // Draw links (lines)
+        const link = svg.append("g")
+            .attr("class", "links")
+            .selectAll("line")
+            .data(graph.links)
+            .enter().append("line")
+            .attr("class", "link")
+            .attr("stroke-width", d => Math.sqrt(d.value));
 
-  return chord;
-}
+        // Draw nodes (circles)
+        const node = svg.append("g")
+            .attr("class", "nodes")
+            .selectAll("circle")
+            .data(graph.nodes)
+            .enter().append("circle")
+            .attr("r", 10)
+            .attr("fill", d => d.group === "Bats" ? "red" : "blue")
+            .call(d3.drag()
+                .on("start", dragstarted)
+                .on("drag", dragged)
+                .on("end", dragended));
+
+        // Add labels to nodes
+        const labels = svg.append("g")
+            .attr("class", "labels")
+            .selectAll("text")
+            .data(graph.nodes)
+            .enter().append("text")
+            .attr("dy", ".35em")
+            .attr("x", 12)
+            .text(d => d.id);
+
+        // Define the tick actions for simulation
+        simulation.on("tick", () => {
+            link
+                .attr("x1", d => d.source.x)
+                .attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x)
+                .attr("y2", d => d.target.y);
+
+            node
+                .attr("cx", d => d.x)
+                .attr("cy", d => d.y);
+
+            labels
+                .attr("x", d => d.x)
+                .attr("y", d => d.y);
+        });
+
+        // Drag functions
+        function dragstarted(event, d) {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x;
+            d.fy = d.y;
+        }
+
+        function dragged(event, d) {
+            d.fx = event.x;
+            d.fy = event.y;
+        }
+
+        function dragended(event, d) {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null;
+            d.fy = null;
+        }
+    </script>
+</body>
+</html>
